@@ -13,9 +13,9 @@ services:
       - MQTT_PASSWORD=
       - PUBLISH_INTERVAL=3000
       - ENABLE_LOGGING=true
-      - OUTPUT_FORMAT=ia
-      - FACTORY_NAME=development
-      - SITE_NAME=cncFactory
+      - OUTPUT_FORMAT=umh
+      - FACTORY_NAME=acme
+      - SITE_NAME=plant1
     volumes:
       # Mount environment file if it exists for local overrides
       - ./.env:/app/.env:ro

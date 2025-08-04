@@ -41,16 +41,29 @@ export interface MachineOperationCycle {
 }
 
 /**
- * Predefined CNC machine configurations for the demo
+ * Get enterprise and site configuration from environment variables
  */
-export const CNC_MACHINES: CNCMachineConfig[] = [
+function getLocationConfig() {
+  return {
+    enterprise: process.env.FACTORY_NAME || process.env.ENTERPRISE_NAME || 'demo-factory',
+    site: process.env.SITE_NAME || process.env.PLANT_NAME || 'plant1'
+  };
+}
+
+/**
+ * Generate CNC machine configurations with dynamic enterprise/site values
+ */
+function generateMachineConfigs(): CNCMachineConfig[] {
+  const { enterprise, site } = getLocationConfig();
+  
+  return [
   {
     machine_id: 'cnc-001',
     display_name: 'Haas VF-2 Mill #1',
     manufacturer: 'Haas',
     model: 'VF-2',
-    enterprise: 'uns-demo',
-    site: 'factory-floor',
+    enterprise: enterprise,
+    site: site,
     area: 'machining',
     work_cell: 'cell-01',
     operational_status: 'operational',
@@ -72,8 +85,8 @@ export const CNC_MACHINES: CNCMachineConfig[] = [
     display_name: 'Haas VF-2 Mill #2',
     manufacturer: 'Haas',
     model: 'VF-2',
-    enterprise: 'uns-demo',
-    site: 'factory-floor',
+    enterprise: enterprise,
+    site: site,
     area: 'machining',
     work_cell: 'cell-01',
     operational_status: 'operational',
@@ -95,8 +108,8 @@ export const CNC_MACHINES: CNCMachineConfig[] = [
     display_name: 'DMG Mori NLX2500 Lathe #1',
     manufacturer: 'DMG Mori',
     model: 'NLX2500',
-    enterprise: 'uns-demo',
-    site: 'factory-floor',
+    enterprise: enterprise,
+    site: site,
     area: 'turning',
     work_cell: 'cell-02',
     operational_status: 'operational',
@@ -118,8 +131,8 @@ export const CNC_MACHINES: CNCMachineConfig[] = [
     display_name: 'DMG Mori NLX2500 Lathe #2',
     manufacturer: 'DMG Mori',
     model: 'NLX2500',
-    enterprise: 'uns-demo',
-    site: 'factory-floor',
+    enterprise: enterprise,
+    site: site,
     area: 'turning',
     work_cell: 'cell-02',
     operational_status: 'operational',
@@ -141,8 +154,8 @@ export const CNC_MACHINES: CNCMachineConfig[] = [
     display_name: 'Mazak Integrex i-300 Multi-Axis #1',
     manufacturer: 'Mazak',
     model: 'Integrex i-300',
-    enterprise: 'uns-demo',
-    site: 'factory-floor',
+    enterprise: enterprise,
+    site: site,
     area: 'multi-axis',
     work_cell: 'cell-03',
     operational_status: 'operational',
@@ -164,8 +177,8 @@ export const CNC_MACHINES: CNCMachineConfig[] = [
     display_name: 'Mazak Integrex i-300 Multi-Axis #2',
     manufacturer: 'Mazak',
     model: 'Integrex i-300',
-    enterprise: 'uns-demo',
-    site: 'factory-floor',
+    enterprise: enterprise,
+    site: site,
     area: 'multi-axis',
     work_cell: 'cell-03',
     operational_status: 'maintenance',
@@ -187,8 +200,8 @@ export const CNC_MACHINES: CNCMachineConfig[] = [
     display_name: 'Okuma Genos L250-E Lathe',
     manufacturer: 'Okuma',
     model: 'Genos L250-E',
-    enterprise: 'uns-demo',
-    site: 'factory-floor',
+    enterprise: enterprise,
+    site: site,
     area: 'turning',
     work_cell: 'cell-04',
     operational_status: 'operational',
@@ -210,8 +223,8 @@ export const CNC_MACHINES: CNCMachineConfig[] = [
     display_name: 'Doosan DNM 500 Mill',
     manufacturer: 'Doosan',
     model: 'DNM 500',
-    enterprise: 'uns-demo',
-    site: 'factory-floor',
+    enterprise: enterprise,
+    site: site,
     area: 'machining',
     work_cell: 'cell-05',
     operational_status: 'operational',
@@ -233,8 +246,8 @@ export const CNC_MACHINES: CNCMachineConfig[] = [
     display_name: 'Fanuc Robodrill α-T14iE Mill',
     manufacturer: 'Fanuc',
     model: 'Robodrill α-T14iE',
-    enterprise: 'uns-demo',
-    site: 'factory-floor',
+    enterprise: enterprise,
+    site: site,
     area: 'precision',
     work_cell: 'cell-06',
     operational_status: 'operational',
@@ -256,8 +269,8 @@ export const CNC_MACHINES: CNCMachineConfig[] = [
     display_name: 'Mori Seiki NV5000 DCG Mill',
     manufacturer: 'Mori Seiki',
     model: 'NV5000 DCG',
-    enterprise: 'uns-demo',
-    site: 'factory-floor',
+    enterprise: enterprise,
+    site: site,
     area: 'precision',
     work_cell: 'cell-06',
     operational_status: 'offline',
@@ -274,7 +287,13 @@ export const CNC_MACHINES: CNCMachineConfig[] = [
       work_envelope: '560x510x460',
     },
   },
-];
+  ];
+}
+
+/**
+ * Get CNC machine configurations with current environment settings
+ */
+export const CNC_MACHINES: CNCMachineConfig[] = generateMachineConfigs();
 
 /**
  * CNC Machine Data Generator class
@@ -415,16 +434,16 @@ export class CNCDataGenerator {
     const outputFormat = process.env.OUTPUT_FORMAT || 'uns';
     let baseTopicPath: string;
     
-    if (outputFormat === 'ia' || outputFormat === 'umh-ia') {
-      // UMH-Core ia/raw format: ia/raw/{enterprise}/{site}/{machine_id}
-      baseTopicPath = `ia/raw/${this.machine.enterprise}/${this.machine.site}/${this.machine.machine_id}`;
+    if (outputFormat === 'umh' || outputFormat === 'umh-core') {
+      // UMH-Core format: umh/v1/{enterprise}/{site}/{area}/{work_cell}/{machine_id}/_raw
+      baseTopicPath = `umh/v1/${this.machine.enterprise}/${this.machine.site}/${this.machine.area}/${this.machine.work_cell}/${this.machine.machine_id}/_raw`;
     } else {
       // Standard UNS format: {enterprise}/{site}/{area}/{work_cell}/{machine_id}
       baseTopicPath = `${this.machine.enterprise}/${this.machine.site}/${this.machine.area}/${this.machine.work_cell}/${this.machine.machine_id}`;
     }
 
     // Generate spindle speed data
-    const sensorPrefix = (outputFormat === 'ia' || outputFormat === 'umh-ia') ? '' : '/info/sensors';
+    const sensorPrefix = (outputFormat === 'umh' || outputFormat === 'umh-core') ? '' : '/info/sensors';
     readings.push({
       topicPath: `${baseTopicPath}${sensorPrefix}/spindle-speed`,
       payload: this.generateSpindleSpeedPayload(now),
@@ -483,7 +502,7 @@ export class CNCDataGenerator {
     }
 
     // Generate operational status data
-    const statusPrefix = (outputFormat === 'ia' || outputFormat === 'umh-ia') ? '' : '/info/status';
+    const statusPrefix = (outputFormat === 'umh' || outputFormat === 'umh-core') ? '' : '/info/status';
     readings.push({
       topicPath: `${baseTopicPath}${statusPrefix}/operational`,
       payload: this.generateOperationalStatusPayload(now),
@@ -496,7 +515,7 @@ export class CNCDataGenerator {
     });
 
     // Generate production data
-    const prodPrefix = (outputFormat === 'ia' || outputFormat === 'umh-ia') ? '' : '/info/production';
+    const prodPrefix = (outputFormat === 'umh' || outputFormat === 'umh-core') ? '' : '/info/production';
     readings.push({
       topicPath: `${baseTopicPath}${prodPrefix}/parts-count`,
       payload: this.generatePartsCountPayload(now),
