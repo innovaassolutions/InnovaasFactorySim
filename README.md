@@ -58,8 +58,15 @@ This simulator serves as the foundation for demonstrating modern Industry 4.0 co
 ## 🚀 Quick Start Guide
 
 ### Prerequisites
+
+#### For UMH Core Integration (Recommended)
+- **UMH Core** - Industrial IoT platform with built-in message broker
+- **Docker** - For containerized deployment
+- **Node.js 20+** (optional) - For local development
+
+#### For Standalone Deployment
 - **Node.js 20+** - JavaScript runtime environment
-- **MQTT Broker** - HiveMQ, Eclipse Mosquitto, or cloud broker
+- **External MQTT Broker** - HiveMQ, Eclipse Mosquitto, or cloud broker
 - **Docker** (optional) - For containerized deployment
 
 ### Local Development Setup
@@ -93,22 +100,40 @@ This simulator serves as the foundation for demonstrating modern Industry 4.0 co
 
 ### Docker Deployment
 
-#### Single Container
+#### With UMH Core Integration (Recommended)
 ```bash
 # Build image
 docker build -t cnc-factory-sim:latest .
 
-# Run container
+# Connect to UMH Core (with built-in message broker)
+docker run -d \
+  --name cnc-factory-sim \
+  --network umh-network \
+  -e MQTT_BROKER_URL=mqtt://umh-core:1883 \
+  -e OUTPUT_FORMAT=umh \
+  cnc-factory-sim:latest
+
+# Or connect to external UMH Core instance
+docker run -d \
+  --name cnc-factory-sim \
+  -e MQTT_BROKER_URL=mqtt://your-umh-core-host:1883 \
+  -e OUTPUT_FORMAT=umh \
+  cnc-factory-sim:latest
+```
+
+#### Standalone with External MQTT Broker
+```bash
+# Run with external MQTT broker (HiveMQ, Mosquitto, etc.)
 docker run -d \
   --name cnc-factory-sim \
   -e MQTT_BROKER_URL=mqtt://your-broker:1883 \
   -e MQTT_USERNAME=your-username \
   -e MQTT_PASSWORD=your-password \
-  -e OUTPUT_FORMAT=both \
+  -e OUTPUT_FORMAT=uns \
   cnc-factory-sim:latest
 ```
 
-#### Docker Compose (Recommended)
+#### Docker Compose (Development)
 ```bash
 # Start complete simulation environment
 docker-compose up -d
@@ -126,12 +151,12 @@ docker-compose down
 
 | Variable | Default | Description | Example |
 |----------|---------|-------------|---------|
-| `MQTT_BROKER_URL` | `mqtt://localhost:1883` | MQTT broker connection | `mqtt://broker.hivemq.com:1883` |
+| `MQTT_BROKER_URL` | `mqtt://localhost:1883` | MQTT broker connection | `mqtt://umh-core:1883` (UMH) or `mqtt://broker.hivemq.com:1883` (standalone) |
 | `MQTT_USERNAME` | - | MQTT authentication username | `factory_user` |
 | `MQTT_PASSWORD` | - | MQTT authentication password | `secure_password` |
 | `PUBLISH_INTERVAL` | `3000` | Data publishing interval (ms) | `1000` for 1-second intervals |
 | `ENABLE_LOGGING` | `true` | Detailed operation logging | `false` for production |
-| `OUTPUT_FORMAT` | `uns` | Data format selection | `uns`, `umh`, or `both` |
+| `OUTPUT_FORMAT` | `uns` | Data format selection | `umh` (for UMH Core), `uns` (standalone), or `both` |
 | `FACTORY_NAME` | `acme` | Enterprise identifier | `your-company` |
 | `SITE_NAME` | `plant1` | Site/plant identifier | `factory-north` |
 
@@ -273,28 +298,46 @@ umh/v1/acme/plant1/multi-axis/cnc-multi-003/_raw/temperature
 
 ## 🌐 Integration Architecture
 
-### Data Flow Pipeline
+### UMH Core Integration (Recommended)
+```
+┌─────────────────┐    ┌──────────────────────────────────┐    ┌─────────────────┐
+│   CNC Factory   │ -> │           UMH Core               │ -> │  Time-Series    │
+│   Simulator     │    │  ┌─────────────────────────────┐ │    │  Database       │
+│                 │    │  │ MQTT Input → Embedded       │ │    │  (TimescaleDB)  │
+│                 │    │  │ Redpanda → Stream Processor │ │    │                 │
+└─────────────────┘    │  └─────────────────────────────┘ │    └─────────────────┘
+                       └──────────────────────────────────┘                    │
+┌─────────────────┐    ┌──────────────┐    ┌──────────────────────────────────┘
+│   Enterprise    │ <- │  Dashboard   │ <- │
+│   Systems       │    │  & Analytics │
+│   (ERP/MES)     │    │              │
+└─────────────────┘    └──────────────┘
+```
+
+### Standalone Integration (Alternative)
 ```
 ┌─────────────────┐    ┌──────────────┐    ┌─────────────────┐
-│   CNC Factory   │ -> │ MQTT Broker  │ -> │ Data Processing │
-│   Simulator     │    │ (HiveMQ/     │    │ (UMH Core/      │
-│                 │    │  Mosquitto)  │    │  Custom)        │
-└─────────────────┘    └──────────────┘    └─────────────────┘
-                                                    │
-┌─────────────────┐    ┌──────────────┐    ┌─────────────────┐
-│   Enterprise    │ <- │  Dashboard   │ <- │  Time-Series    │
-│   Systems       │    │  & Analytics │    │  Database       │
-│   (ERP/MES)     │    │              │    │  (TimescaleDB)  │
-└─────────────────┘    └──────────────┘    └─────────────────┘
+│   CNC Factory   │ -> │ External     │ -> │ Data Processing │
+│   Simulator     │    │ MQTT Broker  │    │ (Custom/        │
+│                 │    │ (HiveMQ/     │    │  Third-party)   │
+└─────────────────┘    │  Mosquitto)  │    └─────────────────┘
+                       └──────────────┘                    │
+┌─────────────────┐    ┌──────────────┐    ┌──────────────────┘
+│   Enterprise    │ <- │  Dashboard   │ <- │
+│   Systems       │    │  & Analytics │
+│   (ERP/MES)     │    │              │
+└─────────────────┘    └──────────────┘
 ```
 
 ### Supported Integration Patterns
 
-#### UMH Core Integration
-- Native support for United Manufacturing Hub architecture
-- Automatic topic structure compliance
-- Benthos stream processor compatibility
-- TimescaleDB time-series storage optimization
+#### UMH Core Integration (Built-in Message Broker)
+- **Embedded Redpanda** - Internal Kafka-compatible message broker
+- **MQTT Gateway** - Direct MQTT input processing
+- **Benthos Stream Processors** - Real-time data transformation
+- **UNS Topic Management** - Unified namespace handling
+- **TimescaleDB Integration** - Optimized time-series storage
+- **No External MQTT Broker Required** - Complete self-contained platform
 
 #### Cloud Platform Integration
 - **AWS IoT Core** - Direct MQTT ingestion with device shadows
@@ -454,34 +497,96 @@ curl http://localhost:3000/status
 - **Error Recovery** - Automatic reconnection and state recovery
 - **Resource Limits** - Memory and CPU constraints for stable operation
 
+## 🚀 Deployment Scenarios
+
+### Scenario 1: UMH Core Integration (Production Ready)
+**Best for:** Industrial IoT platforms, predictive maintenance systems, digital factories
+
+```bash
+# Step 1: Ensure UMH Core is running
+docker run -d --name umh-core \
+  --network umh-network \
+  unitedmanufacturinghub/umh-core:latest
+
+# Step 2: Deploy CNC Simulator
+docker run -d --name cnc-factory-sim \
+  --network umh-network \
+  -e MQTT_BROKER_URL=mqtt://umh-core:1883 \
+  -e OUTPUT_FORMAT=umh \
+  cnc-factory-sim:latest
+
+# Result: Complete industrial IoT pipeline with built-in data processing
+```
+
+### Scenario 2: Standalone Development/Testing
+**Best for:** Development, testing, custom integrations
+
+```bash
+# Step 1: Start external MQTT broker (if needed)
+docker run -d --name mosquitto -p 1883:1883 eclipse-mosquitto
+
+# Step 2: Deploy CNC Simulator  
+docker run -d --name cnc-factory-sim \
+  -e MQTT_BROKER_URL=mqtt://localhost:1883 \
+  -e OUTPUT_FORMAT=uns \
+  cnc-factory-sim:latest
+
+# Result: Flexible MQTT data stream for custom processing
+```
+
+### Scenario 3: Cloud Integration
+**Best for:** Cloud-native applications, enterprise systems
+
+```bash
+# Connect to HiveMQ Cloud, AWS IoT Core, or Azure IoT Hub
+docker run -d --name cnc-factory-sim \
+  -e MQTT_BROKER_URL=mqtts://your-cloud-broker:8883 \
+  -e MQTT_USERNAME=cloud-user \
+  -e MQTT_PASSWORD=secure-token \
+  -e OUTPUT_FORMAT=both \
+  cnc-factory-sim:latest
+```
+
 ## 📚 Use Cases & Examples
 
-### Predictive Maintenance Training
-Generate months of historical data for machine learning model training:
+### UMH Core Predictive Maintenance
+Complete industrial IoT demonstration with UMH Core:
 ```bash
-# Generate 6 months of accelerated data
-docker run -e PUBLISH_INTERVAL=100 -e ACCELERATED_TIME=true cnc-factory-sim
+# High-frequency data for ML training
+docker run --network umh-network \
+  -e MQTT_BROKER_URL=mqtt://umh-core:1883 \
+  -e OUTPUT_FORMAT=umh \
+  -e PUBLISH_INTERVAL=1000 \
+  cnc-factory-sim:latest
 ```
 
 ### Digital Twin Development
-Create real-time digital representations of physical machines:
+Real-time factory floor representation:
 ```bash
-# Mirror production environment
-docker run -e OUTPUT_FORMAT=both -e ENABLE_TWIN_MODE=true cnc-factory-sim
+# Mirror production environment with dual output
+docker run -e OUTPUT_FORMAT=both \
+  -e FACTORY_NAME=digital-twin \
+  -e SITE_NAME=virtual-plant \
+  cnc-factory-sim:latest
 ```
 
-### Load Testing MQTT Infrastructure
-Stress test your MQTT broker and downstream systems:
+### Load Testing Infrastructure  
+Stress test your industrial IoT platform:
 ```bash
 # High-frequency data generation
-docker run -e PUBLISH_INTERVAL=50 -e BURST_MODE=true cnc-factory-sim
+docker run -e PUBLISH_INTERVAL=100 \
+  -e OUTPUT_FORMAT=umh \
+  cnc-factory-sim:latest
 ```
 
-### Edge Computing Validation
-Test edge processing capabilities with realistic data volumes:
+### Development & Integration Testing
+Validate data processing pipelines:
 ```bash
-# Edge-optimized configuration
-docker run -e MQTT_QOS=1 -e BATCH_SIZE=10 cnc-factory-sim
+# Controlled test environment
+docker run -e MQTT_BROKER_URL=mqtt://test-broker:1883 \
+  -e PUBLISH_INTERVAL=5000 \
+  -e ENABLE_LOGGING=true \
+  cnc-factory-sim:latest
 ```
 
 ## 🤝 Contributing
