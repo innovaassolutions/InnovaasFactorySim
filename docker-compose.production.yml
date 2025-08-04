@@ -1,0 +1,169 @@
+version: '3.8'
+
+services:
+  # HiveMQ Community Edition MQTT Broker
+  hivemq:
+    image: hivemq/hivemq-ce:latest
+    container_name: hivemq-broker
+    ports:
+      - "1883:1883"      # MQTT
+      - "8080:8080"      # Control Center Web UI
+      - "8000:8000"      # WebSocket
+    volumes:
+      - hivemq-data:/opt/hivemq/data
+      - hivemq-log:/opt/hivemq/log
+      - ./hivemq-config:/opt/hivemq/conf
+    environment:
+      - JAVA_OPTS=-XX:+UnlockExperimentalVMOptions -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/mqtt/clients"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uns-network
+
+  # CNC Machine Simulator
+  cnc-simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cnc-simulator
+    depends_on:
+      hivemq:
+        condition: service_healthy
+    environment:
+      - MQTT_BROKER_URL=mqtt://hivemq:1883
+      - MQTT_USERNAME=cnc_simulator
+      - MQTT_PASSWORD=secure_cnc_password
+      - PUBLISH_INTERVAL=3000
+      - ENABLE_LOGGING=true
+      - OUTPUT_FORMAT=umh
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "console.log('CNC Simulator is running')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - uns-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # UMH Core Data Processing
+  umh-core:
+    image: ghcr.io/united-manufacturing-hub/benthos-umh:latest
+    container_name: umh-core
+    depends_on:
+      hivemq:
+        condition: service_healthy
+    volumes:
+      - ./umh-core-config:/etc/benthos
+      - umh-core-data:/data
+    environment:
+      - BENTHOS_CONFIG_PATH=/etc/benthos/config.yaml
+      - LOG_LEVEL=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4195/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    ports:
+      - "4195:4195"      # Benthos HTTP API
+    networks:
+      - uns-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # TimescaleDB for time-series data storage
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: timescaledb
+    environment:
+      - POSTGRES_DB=uns_production
+      - POSTGRES_USER=uns_admin
+      - POSTGRES_PASSWORD=uns_secure_password_2024
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale-data:/var/lib/postgresql/data
+      - ./timescale-init:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uns_admin -d uns_production"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - uns-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis for caching and real-time data
+  redis:
+    image: redis:7-alpine
+    container_name: redis-cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - uns-network
+
+  # Portainer for container management (optional)
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer-data:/data
+    restart: unless-stopped
+    networks:
+      - uns-network
+
+volumes:
+  hivemq-data:
+    driver: local
+  hivemq-log:
+    driver: local
+  umh-core-data:
+    driver: local
+  timescale-data:
+    driver: local
+  redis-data:
+    driver: local
+  portainer-data:
+    driver: local
+
+networks:
+  uns-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

@@ -1,0 +1,48 @@
+# Docker Compose for CNC Simulator Development/Testing
+version: '3.8'
+
+services:
+  cnc-simulator:
+    build: .
+    container_name: cnc-simulator
+    environment:
+      - MQTT_BROKER_URL=mqtt://host.docker.internal:1883
+      - MQTT_USERNAME=
+      - MQTT_PASSWORD=
+      - PUBLISH_INTERVAL=3000
+      - ENABLE_LOGGING=true
+    volumes:
+      # Mount environment file if it exists
+      - ./.env:/app/.env:ro
+    restart: unless-stopped
+    networks:
+      - cnc-network
+    depends_on:
+      - mosquitto
+    # Add labels for container management
+    labels:
+      - "com.uns-demo.service=cnc-simulator"
+      - "com.uns-demo.version=2.0"
+
+  # Optional: Local Mosquitto broker for testing
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: mosquitto
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    restart: unless-stopped
+    networks:
+      - cnc-network
+    labels:
+      - "com.uns-demo.service=mqtt-broker"
+
+networks:
+  cnc-network:
+    driver: bridge
+
+volumes:
+  mosquitto-data:
+    driver: local

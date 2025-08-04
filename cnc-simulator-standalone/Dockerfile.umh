@@ -1,0 +1,39 @@
+FROM node:20-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy built JavaScript files
+COPY dist/ ./dist/
+
+# Copy environment template
+COPY .env.example .env
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S simulator -u 1001
+
+# Change ownership
+RUN chown -R simulator:nodejs /app
+USER simulator
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD node -e "console.log('CNC Simulator healthy')" || exit 1
+
+# Set environment
+ENV NODE_ENV=production
+ENV UMH_HOST=umh-core
+ENV UMH_PORT=8090
+
+# Expose port for potential HTTP endpoints
+EXPOSE 3001
+
+# Start the UMH-integrated simulator
+CMD ["node", "dist/umh-index.js"]
