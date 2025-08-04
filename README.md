@@ -499,46 +499,331 @@ curl http://localhost:3000/status
 
 ## 🚀 Deployment Scenarios
 
-### Scenario 1: UMH Core Integration (Production Ready)
+### Remote Server Deployment (Portainer-First Approach) 🚀
+
+#### Prerequisites for Remote Deployment
+- **Remote server access** - SSH, cloud console, or server management panel
+- **Docker installed** - Docker Engine 20.0+ on target server
+- **Network access** - Server can reach GitHub and Docker registries
+- **Resource requirements** - Minimum 512MB RAM, 1GB disk space
+
+#### Step 1: Initial Server Setup
+```bash
+# SSH into your remote server
+ssh user@your-server-ip
+
+# Install Docker if not present
+sudo apt update && sudo apt install -y docker.io
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -aG docker $USER
+
+# Logout and login again for docker group to take effect
+exit
+ssh user@your-server-ip
+```
+
+#### Step 2: Install Portainer (Docker Management UI)
+```bash
+# Create Portainer volume for persistent data
+docker volume create portainer_data
+
+# Deploy Portainer Community Edition
+docker run -d \
+  --name portainer \
+  --restart unless-stopped \
+  -p 9443:9443 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v portainer_data:/data \
+  portainer/portainer-ce:latest
+
+# Verify Portainer is running
+docker ps | grep portainer
+
+# Access information
+echo "🌐 Portainer Web UI: https://your-server-ip:9443"
+echo "🔐 First-time setup required via web browser"
+```
+
+#### Step 3: Portainer Initial Setup
+1. **Open browser** to `https://your-server-ip:9443`
+2. **Create admin account** - Username: `admin`, Password: `SecurePassword123!` (minimum 12 characters)
+3. **Select environment** - Choose "Get Started" → "Docker" (local environment)
+4. **Complete setup** - Portainer dashboard will load
+
+> **🔒 Security Note:** Portainer provides full Docker management access. Use strong passwords and consider firewall rules to restrict access to trusted IP addresses only.
+
+#### Step 4: Deploy CNC Factory Simulator via Portainer (With Screenshots)
+
+**🖥️ Step-by-Step Portainer Deployment (UMH Core Integration)**
+
+1. **Access Portainer Dashboard**
+   - Navigate to `https://your-server-ip:9443`
+   - Login with your admin credentials
+
+2. **Create UMH Network First**
+   - Click **"Networks"** in left sidebar
+   - Click **"Add network"** button
+   - **Name:** `umh-network`
+   - **Driver:** `bridge`
+   - Click **"Create the network"**
+
+3. **Deploy UMH Core Container**
+   - Click **"Containers"** in left sidebar
+   - Click **"Add container"** button
+   - Fill out the form:
+
+   ```
+   Name: umh-core
+   Image: unitedmanufacturinghub/umh-core:latest
+   ```
+
+   - **Network tab:**
+     * Network: Select `umh-network`
+   
+   - **Advanced container settings** → **Restart policy:**
+     * Policy: `Unless stopped`
+   
+   - **Port mapping:**
+     * Host: `1883` → Container: `1883` (MQTT)
+     * Host: `8080` → Container: `8080` (Web UI)
+   
+   - Click **"Deploy the container"**
+
+4. **Deploy CNC Factory Simulator**
+   - Click **"Add container"** button again
+   - Fill out the form:
+
+   ```
+   Name: cnc-factory-sim
+   Registry: Docker Hub
+   Image: innovaassolutions/cnc-factory-sim:latest
+   ```
+   > **Note:** Replace with actual Docker Hub image when published, or use manual build approach below
+
+   - **Network tab:**
+     * Network: Select `umh-network`
+   
+   - **Advanced container settings** → **Env tab:**
+     ```
+     MQTT_BROKER_URL = mqtt://umh-core:1883
+     OUTPUT_FORMAT = umh
+     FACTORY_NAME = remote-factory
+     SITE_NAME = production-plant
+     PUBLISH_INTERVAL = 3000
+     ENABLE_LOGGING = true
+     ```
+   
+   - **Restart policy:**
+     * Policy: `Unless stopped`
+   
+   - Click **"Deploy the container"**
+
+##### Option B: Standalone with External MQTT Broker (Portainer)
+
+**🖥️ Step-by-Step Portainer Deployment (Standalone)**
+
+1. **Deploy Mosquitto MQTT Broker**
+   - **Containers** → **Add container**
+   
+   ```
+   Name: mosquitto
+   Image: eclipse-mosquitto:latest
+   ```
+   
+   - **Port mapping:**
+     * Host: `1883` → Container: `1883`
+   
+   - **Restart policy:** `Unless stopped`
+   - Click **"Deploy the container"**
+
+2. **Deploy CNC Factory Simulator**
+   - **Containers** → **Add container**
+   
+   ```
+   Name: cnc-factory-sim
+   Image: innovaassolutions/cnc-factory-sim:latest
+   ```
+   
+   - **Environment variables:**
+     ```
+     MQTT_BROKER_URL = mqtt://mosquitto:1883
+     OUTPUT_FORMAT = uns
+     FACTORY_NAME = standalone-factory
+     SITE_NAME = test-plant
+     ```
+   
+   - **Networks:** Connect to same network as Mosquitto
+   - Click **"Deploy the container"**
+
+##### Option C: Manual Build from GitHub (Portainer)
+
+**🖥️ If Docker Hub image not available, build from source:**
+
+1. **Access Portainer Terminal**
+   - **Containers** → Create temporary build container
+   - **Image:** `ubuntu:latest`
+   - **Console tab** → **Command:** `/bin/bash`
+   - **Deploy** and **Connect** to console
+
+2. **Build Image in Container Console**
+   ```bash
+   # Install git and docker (if needed)
+   apt update && apt install -y git
+
+   # Clone repository
+   git clone https://github.com/innovaassolutions/InnovaasFactorySim.git
+   cd InnovaasFactorySim
+
+   # Exit and use Portainer's build feature
+   exit
+   ```
+
+3. **Use Portainer Image Build**
+   - **Images** → **Build a new image**
+   - **Name:** `cnc-factory-sim:latest`
+   - **Build method:** Upload
+   - Upload the cloned repository as ZIP file
+   - **Dockerfile path:** `Dockerfile`
+   - Click **"Build the image"**
+
+4. **Deploy Built Image**
+   - Follow steps from Option A or B above
+   - Use `cnc-factory-sim:latest` as image name
+
+#### Step 5: Verify Deployment
+```bash
+# Check if containers are running
+docker ps
+
+# View CNC Simulator logs
+docker logs cnc-factory-sim
+
+# Expected output:
+# 🏭 Starting Standalone CNC Machine Simulator...
+# ✅ CNC Simulator started successfully!
+# 🚀 10 CNC machines are now generating sensor data every 3 seconds
+
+# Monitor real-time logs
+docker logs -f cnc-factory-sim
+```
+
+#### Step 6: Verify Deployment & Monitoring
+
+**🖥️ Portainer Web-Based Verification (Recommended)**
+
+1. **Access Portainer Dashboard**
+   - Navigate to `https://your-server-ip:9443`
+   - Login with your admin credentials
+
+2. **Check Container Status**
+   - Click **"Containers"** in left sidebar
+   - Look for containers with green "running" status:
+     - ✅ `umh-core` - Running (UMH Core integration)
+     - ✅ `cnc-factory-sim` - Running (CNC Factory Simulator)
+   - Or for standalone deployment:
+     - ✅ `mosquitto` - Running (MQTT Broker)
+     - ✅ `cnc-factory-sim` - Running (CNC Factory Simulator)
+
+3. **View Real-Time Logs**
+   - Click on **`cnc-factory-sim`** container name
+   - Go to **"Logs"** tab
+   - Expected output should show:
+     ```
+     🏭 Starting CNC Machine Simulation Service
+     🔌 Connecting to MQTT broker...
+     ✅ Connected to MQTT broker
+     📊 Started publishing sensor data
+     ✅ CNC simulation started successfully
+     🚀 10 CNC machines are now generating sensor data every 3 seconds
+     ```
+
+4. **Monitor Resource Usage**
+   - Click **"Stats"** tab on container page
+   - Monitor CPU usage (should be <10% for normal operation)
+   - Monitor memory usage (typically 50-100MB)
+   - Monitor network I/O (should show consistent MQTT traffic)
+
+5. **Test Data Flow (UMH Core Integration)**
+   - Access UMH Core dashboard: `http://your-server-ip:8080`
+   - Navigate to data streams or MQTT topics
+   - Verify incoming sensor data from CNC machines
+   - Topics should follow format: `umh.v1.remote-factory.production-plant.machining.cnc-mill-001._raw.spindle_speed`
+
+**🔧 Command Line Verification (Alternative)**
+
+```bash
+# Check container status
+docker ps
+
+# Expected output should show both containers running:
+# CONTAINER ID   IMAGE                                    STATUS
+# abc123...      unitedmanufacturinghub/umh-core:latest  Up X minutes
+# def456...      innovaassolutions/cnc-factory-sim       Up X minutes
+
+# View CNC Simulator logs
+docker logs cnc-factory-sim
+
+# Monitor real-time logs with timestamps
+docker logs -f --timestamps cnc-factory-sim
+
+# Check resource usage
+docker stats cnc-factory-sim
+
+# Test MQTT connectivity (if mosquitto-clients installed)
+mosquitto_sub -h your-server-ip -t "umh.v1.remote-factory/+/+/+/+/_raw/+"
+```
+
+**🚨 Troubleshooting Common Issues**
+
+| Issue | Portainer Check | Solution |
+|-------|----------------|----------|
+| Container not starting | Containers → Status = "Exited" | Check Logs tab for error messages |
+| No MQTT connection | Logs show "MQTT connection error" | Verify UMH Core is running and network connectivity |
+| No data publishing | Logs show connection but no "📤 Published" messages | Check environment variables in container settings |
+| High resource usage | Stats tab shows >50% CPU/Memory | Consider reducing PUBLISH_INTERVAL |
+| Network issues | Container can't reach MQTT broker | Check Networks tab and container network assignment |
+
+**🔄 Container Management via Portainer**
+
+- **Start/Stop/Restart:** Use action buttons on Containers page
+- **View Logs:** Click container → Logs tab → Enable "Auto-refresh"
+- **Modify Settings:** Click container → "Recreate" button → Edit environment variables
+- **Terminal Access:** Click container → "Console" tab → Connect with `/bin/sh`
+- **Export Configuration:** Container settings can be duplicated or exported as JSON
+
+### Local Development Scenarios
+
+#### Scenario 1: UMH Core Integration (Production Ready)
 **Best for:** Industrial IoT platforms, predictive maintenance systems, digital factories
 
 ```bash
-# Step 1: Ensure UMH Core is running
-docker run -d --name umh-core \
-  --network umh-network \
-  unitedmanufacturinghub/umh-core:latest
-
-# Step 2: Deploy CNC Simulator
-docker run -d --name cnc-factory-sim \
-  --network umh-network \
+# Local development with UMH Core
+docker network create umh-network
+docker run -d --name umh-core --network umh-network unitedmanufacturinghub/umh-core:latest
+docker run -d --name cnc-factory-sim --network umh-network \
   -e MQTT_BROKER_URL=mqtt://umh-core:1883 \
   -e OUTPUT_FORMAT=umh \
   cnc-factory-sim:latest
-
-# Result: Complete industrial IoT pipeline with built-in data processing
 ```
 
-### Scenario 2: Standalone Development/Testing
+#### Scenario 2: Standalone Development/Testing
 **Best for:** Development, testing, custom integrations
 
 ```bash
-# Step 1: Start external MQTT broker (if needed)
+# Local development with external broker
 docker run -d --name mosquitto -p 1883:1883 eclipse-mosquitto
-
-# Step 2: Deploy CNC Simulator  
 docker run -d --name cnc-factory-sim \
   -e MQTT_BROKER_URL=mqtt://localhost:1883 \
   -e OUTPUT_FORMAT=uns \
   cnc-factory-sim:latest
-
-# Result: Flexible MQTT data stream for custom processing
 ```
 
-### Scenario 3: Cloud Integration
+#### Scenario 3: Cloud Integration Testing
 **Best for:** Cloud-native applications, enterprise systems
 
 ```bash
-# Connect to HiveMQ Cloud, AWS IoT Core, or Azure IoT Hub
+# Local testing with cloud broker
 docker run -d --name cnc-factory-sim \
   -e MQTT_BROKER_URL=mqtts://your-cloud-broker:8883 \
   -e MQTT_USERNAME=cloud-user \
