@@ -8,10 +8,17 @@ WORKDIR /app
 
 # Install dependencies first for better Docker layer caching
 COPY package.json package-lock.json ./
-RUN npm ci --only=production
+RUN npm ci --include=dev
 
-# Copy source code
-COPY dist/ ./dist/
+# Copy TypeScript configuration and source code
+COPY tsconfig.json ./
+COPY src/ ./src/
+
+# Build TypeScript to JavaScript
+RUN npm run build
+
+# Remove development dependencies to reduce image size
+RUN npm ci --only=production && npm cache clean --force
 
 # Create environment file template
 RUN echo "# CNC Simulator Configuration\n\

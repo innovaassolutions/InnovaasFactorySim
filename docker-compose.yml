@@ -1,4 +1,5 @@
-# Docker Compose for CNC Simulator Development/Testing
+# Docker Compose for CNC Simulator
+# Generates CNC machine sensor data and sends to external MQTT broker
 version: '3.8'
 
 services:
@@ -6,43 +7,29 @@ services:
     build: .
     container_name: cnc-simulator
     environment:
-      - MQTT_BROKER_URL=mqtt://host.docker.internal:1883
+      # Connect to external MQTT broker (UMH-Core, HiveMQ, etc.)
+      - MQTT_BROKER_URL=mqtt://umh-core:1883
       - MQTT_USERNAME=
       - MQTT_PASSWORD=
       - PUBLISH_INTERVAL=3000
       - ENABLE_LOGGING=true
+      - OUTPUT_FORMAT=umh
+      - FACTORY_NAME=demo-factory
+      - SITE_NAME=plant-1
     volumes:
-      # Mount environment file if it exists
+      # Mount environment file if it exists for local overrides
       - ./.env:/app/.env:ro
     restart: unless-stopped
+    # Connect to external network where UMH-Core or other MQTT broker runs
     networks:
-      - cnc-network
-    depends_on:
-      - mosquitto
+      - default
     # Add labels for container management
     labels:
-      - "com.uns-demo.service=cnc-simulator"
-      - "com.uns-demo.version=2.0"
+      - "com.cnc-simulator.service=data-generator"
+      - "com.cnc-simulator.version=2.0"
+      - "com.cnc-simulator.description=CNC Factory Sensor Data Generator"
 
-  # Optional: Local Mosquitto broker for testing
-  mosquitto:
-    image: eclipse-mosquitto:2.0
-    container_name: mosquitto
-    ports:
-      - "1883:1883"
-      - "9001:9001"
-    volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-    restart: unless-stopped
-    networks:
-      - cnc-network
-    labels:
-      - "com.uns-demo.service=mqtt-broker"
-
+# Use default network to connect to external services
 networks:
-  cnc-network:
+  default:
     driver: bridge
-
-volumes:
-  mosquitto-data:
-    driver: local
