@@ -411,17 +411,28 @@ export class CNCDataGenerator {
     const readings: SensorReading[] = [];
 
     // Base topic path for this machine
-    const baseTopicPath = `${this.machine.enterprise}/${this.machine.site}/${this.machine.area}/${this.machine.work_cell}/${this.machine.machine_id}`;
+    // Support different topic formats based on environment
+    const outputFormat = process.env.OUTPUT_FORMAT || 'uns';
+    let baseTopicPath: string;
+    
+    if (outputFormat === 'ia' || outputFormat === 'umh-ia') {
+      // UMH-Core ia/raw format: ia/raw/{enterprise}/{site}/{machine_id}
+      baseTopicPath = `ia/raw/${this.machine.enterprise}/${this.machine.site}/${this.machine.machine_id}`;
+    } else {
+      // Standard UNS format: {enterprise}/{site}/{area}/{work_cell}/{machine_id}
+      baseTopicPath = `${this.machine.enterprise}/${this.machine.site}/${this.machine.area}/${this.machine.work_cell}/${this.machine.machine_id}`;
+    }
 
     // Generate spindle speed data
+    const sensorPrefix = (outputFormat === 'ia' || outputFormat === 'umh-ia') ? '' : '/info/sensors';
     readings.push({
-      topicPath: `${baseTopicPath}/info/sensors/spindle-speed`,
+      topicPath: `${baseTopicPath}${sensorPrefix}/spindle-speed`,
       payload: this.generateSpindleSpeedPayload(now),
     });
 
     // Generate spindle load data
     readings.push({
-      topicPath: `${baseTopicPath}/info/sensors/spindle-load`,
+      topicPath: `${baseTopicPath}${sensorPrefix}/spindle-load`,
       payload: this.generateSpindleLoadPayload(now),
     });
 
@@ -429,69 +440,71 @@ export class CNCDataGenerator {
     const axisLabels = ['x', 'y', 'z', 'a', 'b', 'c'].slice(0, this.machine.capabilities.axes);
     axisLabels.forEach(axis => {
       readings.push({
-        topicPath: `${baseTopicPath}/info/sensors/position-${axis}`,
+        topicPath: `${baseTopicPath}${sensorPrefix}/position-${axis}`,
         payload: this.generateAxisPositionPayload(axis, now),
       });
     });
 
     // Generate feedrate data
     readings.push({
-      topicPath: `${baseTopicPath}/info/sensors/feedrate`,
+      topicPath: `${baseTopicPath}${sensorPrefix}/feedrate`,
       payload: this.generateFeedratePayload(now),
     });
 
     // Generate vibration data
     readings.push({
-      topicPath: `${baseTopicPath}/info/sensors/vibration`,
+      topicPath: `${baseTopicPath}${sensorPrefix}/vibration`,
       payload: this.generateVibrationPayload(now),
     });
 
     // Generate temperature data
     readings.push({
-      topicPath: `${baseTopicPath}/info/sensors/temperature`,
+      topicPath: `${baseTopicPath}${sensorPrefix}/temperature`,
       payload: this.generateTemperaturePayload(now),
     });
 
     // Generate tool data
     readings.push({
-      topicPath: `${baseTopicPath}/info/sensors/current-tool`,
+      topicPath: `${baseTopicPath}${sensorPrefix}/current-tool`,
       payload: this.generateCurrentToolPayload(now),
     });
 
     // Generate coolant data
     if (this.machine.capabilities.coolant_system) {
       readings.push({
-        topicPath: `${baseTopicPath}/info/sensors/coolant-pressure`,
+        topicPath: `${baseTopicPath}${sensorPrefix}/coolant-pressure`,
         payload: this.generateCoolantPressurePayload(now),
       });
       
       readings.push({
-        topicPath: `${baseTopicPath}/info/sensors/coolant-flow`,
+        topicPath: `${baseTopicPath}${sensorPrefix}/coolant-flow`,
         payload: this.generateCoolantFlowPayload(now),
       });
     }
 
     // Generate operational status data
+    const statusPrefix = (outputFormat === 'ia' || outputFormat === 'umh-ia') ? '' : '/info/status';
     readings.push({
-      topicPath: `${baseTopicPath}/info/status/operational`,
+      topicPath: `${baseTopicPath}${statusPrefix}/operational`,
       payload: this.generateOperationalStatusPayload(now),
     });
 
     // Generate cycle information
     readings.push({
-      topicPath: `${baseTopicPath}/info/status/cycle-phase`,
+      topicPath: `${baseTopicPath}${statusPrefix}/cycle-phase`,
       payload: this.generateCyclePhasePayload(now),
     });
 
     // Generate production data
+    const prodPrefix = (outputFormat === 'ia' || outputFormat === 'umh-ia') ? '' : '/info/production';
     readings.push({
-      topicPath: `${baseTopicPath}/info/production/parts-count`,
+      topicPath: `${baseTopicPath}${prodPrefix}/parts-count`,
       payload: this.generatePartsCountPayload(now),
     });
 
     // Generate efficiency metrics
     readings.push({
-      topicPath: `${baseTopicPath}/info/production/efficiency`,
+      topicPath: `${baseTopicPath}${prodPrefix}/efficiency`,
       payload: this.generateEfficiencyPayload(now),
     });
 

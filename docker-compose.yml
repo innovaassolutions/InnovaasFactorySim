@@ -7,15 +7,15 @@ services:
     build: .
     container_name: cnc-simulator
     environment:
-      # Connect to external MQTT broker (UMH-Core, HiveMQ, etc.)
-      - MQTT_BROKER_URL=mqtt://umh-core:1883
+      # Connect to UMH-Core MQTT broker
+      - MQTT_BROKER_URL=tcp://united-manufacturing-hub-mqtt.united-manufacturing-hub.svc.cluster.local:1883
       - MQTT_USERNAME=
       - MQTT_PASSWORD=
       - PUBLISH_INTERVAL=3000
       - ENABLE_LOGGING=true
-      - OUTPUT_FORMAT=umh
-      - FACTORY_NAME=demo-factory
-      - SITE_NAME=plant-1
+      - OUTPUT_FORMAT=ia
+      - FACTORY_NAME=development
+      - SITE_NAME=cncFactory
     volumes:
       # Mount environment file if it exists for local overrides
       - ./.env:/app/.env:ro
